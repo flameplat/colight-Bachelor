@@ -1,1 +1,15 @@
 .idea/*
+
+# Generated output
+model/
+records/
+summary/
+temp.tensorboard/
+
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
