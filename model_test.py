@@ -140,7 +140,7 @@ def test(model_dir, cnt_round, run_cnt, _dic_traffic_env_conf, if_gui):
             state = next_state
             step_num += 1
         # print('bulk_log_multi_process')
-        env.bulk_log_multi_process()
+        env.bulk_log()
         env.log_attention(attention_dict)
 
         env.end_sumo()
@@ -150,6 +150,7 @@ def test(model_dir, cnt_round, run_cnt, _dic_traffic_env_conf, if_gui):
             # print("downsample", path_to_log)
             downsample_for_system(path_to_log, dic_traffic_env_conf)
             # print("end down")
+        print("model_test finished successfully for round %d" % cnt_round)
 
     except:
         error_dir = model_dir.replace("model", "errors")

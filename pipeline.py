@@ -223,11 +223,13 @@ class Pipeline:
     def downsample(self, path_to_log, i):
 
         path_to_pkl = os.path.join(path_to_log, "inter_{0}.pkl".format(i))
+        #print("downsample: size before read = {0}".format(os.path.getsize(path_to_pkl)))
         with open(path_to_pkl, "rb") as f_logging_data:
             try:
                 logging_data = pickle.load(f_logging_data)
                 subset_data = logging_data[::10]
-                print(subset_data)
+                with open(os.path.join(os.path.dirname(path_to_log), "subset_data.log"), "a") as f:
+                    f.write(str(subset_data) + "\n")
                 os.remove(path_to_pkl)
                 with open(path_to_pkl, "wb") as f_subset:
                     try:
@@ -400,6 +402,9 @@ class Pipeline:
                     p = process_list[i]
                     print("generator %d to join" % i)
                     p.join()
+                    print("generator %d finish join, exitcode=%d" % (i, p.exitcode))
+                    if p.exitcode != 0:
+                        print("WARNING: generator %d crashed!" % i)
                     print("generator %d finish join" % i)
                 print("end join")
             else:
@@ -475,8 +480,15 @@ class Pipeline:
                 p = Process(target=model_test.test,
                             args=(self.dic_path["PATH_TO_MODEL"], cnt_round, self.dic_exp_conf["RUN_COUNTS"], self.dic_traffic_env_conf, False))
                 p.start()
+                print("model_test process started, pid=%d" % p.pid)
+
                 if self.dic_exp_conf["EARLY_STOP"]:
                     p.join()
+                # non-blocking check
+                if not p.is_alive():
+                    print("model_test for round %d finished, exitcode=%d" % (cnt_round, p.exitcode))
+                else:
+                    print("model_test for round %d still running in background" % cnt_round)
             else:
                 model_test.test(self.dic_path["PATH_TO_MODEL"], cnt_round, self.dic_exp_conf["RUN_COUNTS"], self.dic_traffic_env_conf, if_gui=False)
 
@@ -492,7 +504,7 @@ class Pipeline:
                     break
 
             print('==============  model pool evaluation =============')
-            if self.dic_exp_conf["MODEL_POOL"] and cnt_round > 50:
+            if self.dic_exp_conf["MODEL_POOL"] and cnt_round > 10:
                 if multi_process:
                     p = Process(target=self.model_pool_wrapper,
                                 args=(self.dic_path,

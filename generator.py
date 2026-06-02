@@ -4,6 +4,7 @@ from config import DIC_AGENTS, DIC_ENVS
 import time
 import sys
 from multiprocessing import Process, Pool
+import traceback
 
 class Generator:
     def __init__(self, cnt_round, cnt_gen, dic_path, dic_exp_conf, dic_agent_conf, dic_traffic_env_conf, best_round=None):
@@ -22,7 +23,7 @@ class Generator:
         else:
             self.path_to_log = os.path.join(self.dic_path["PATH_TO_WORK_DIRECTORY"], "train_round", "round_"+str(self.cnt_round), "generator_"+str(self.cnt_gen))
         if not os.path.exists(self.path_to_log):
-            os.makedirs(self.path_to_log)  
+            os.makedirs(self.path_to_log, exist_ok=True)  
 
         self.env = DIC_ENVS[dic_traffic_env_conf["SIMULATOR_TYPE"]](
                               path_to_log = self.path_to_log,
@@ -122,7 +123,11 @@ class Generator:
 
         log_start_time = time.time()
         print("start logging")
-        self.env.bulk_log_multi_process()
+        try:
+            self.env.bulk_log()
+        except Exception as e:
+            print("bulk_log FAILED:", traceback.format_exc())
+
         log_time = time.time() - log_start_time
 
         self.env.end_sumo()

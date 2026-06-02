@@ -14,6 +14,9 @@ import threading
 from multiprocessing import Process, Pool
 from script import get_traffic_volume
 from copy import deepcopy
+import traceback as tb
+from topology import build_grid_adjacency, build_torus_adjacency, build_none_adjacency, build_optimal_adjacency, compute_lambda2
+
 
 class RoadNet:
 
@@ -788,13 +791,16 @@ class AnonEnv:
         # touch new inter_{}.pkl (if exists, remove)
         for inter_ind in range(self.dic_traffic_env_conf["NUM_INTERSECTIONS"]):
             path_to_log_file = os.path.join(self.path_to_log, "inter_{0}.pkl".format(inter_ind))
+            if os.path.exists(path_to_log_file) and os.path.getsize(path_to_log_file) > 0:
+                print("WARNING: clearing non-empty file: {}".format(path_to_log_file))
+                tb.print_stack()
             f = open(path_to_log_file, "wb")
             f.close()
 
     def reset(self):
 
         print("# self.eng.reset() to be implemented")
-
+        
         cityflow_config = {
             "interval": self.dic_traffic_env_conf["INTERVAL"],
             "seed": 0,
@@ -810,10 +816,12 @@ class AnonEnv:
         print("=========================")
         print(cityflow_config)
 
-        with open(os.path.join(self.path_to_work_directory,"cityflow.config"), "w") as json_file:
+        os.makedirs(self.path_to_work_directory,exist_ok=True)
+        with open(os.path.join(self.path_to_log, "cityflow.config"), "w") as json_file:
             json.dump(cityflow_config, json_file)
-        self.eng = engine.Engine(os.path.join(self.path_to_work_directory,"cityflow.config"), thread_num=1)
-        # self.load_roadnet()
+        self.eng = engine.Engine(os.path.join(self.path_to_log, "cityflow.config"), thread_num=1)
+
+# self.load_roadnet()
         # self.load_flow()
 
 
@@ -1089,18 +1097,25 @@ class AnonEnv:
                                                     "action": action[inter_ind]})
 
     def batch_log(self, start, stop):
-        for inter_ind in range(start, stop):
-            if int(inter_ind)%100 == 0:
-                print("Batch log for inter ",inter_ind)
-            path_to_log_file = os.path.join(self.path_to_log, "vehicle_inter_{0}.csv".format(inter_ind))
-            dic_vehicle = self.list_intersection[inter_ind].get_dic_vehicle_arrive_leave_time()
-            df = pd.DataFrame.from_dict(dic_vehicle,orient='index')
-            df.to_csv(path_to_log_file, na_rep="nan")
+        print("batch_log CALLED: start={0}, stop={1}, path={2}".format(start, stop, self.path_to_log))
+        sys.stdout.flush()
+        try:
+            for inter_ind in range(start, stop):
+                if int(inter_ind)%100 == 0:
+                    print("Batch log for inter ",inter_ind)
+                path_to_log_file = os.path.join(self.path_to_log, "vehicle_inter_{0}.csv".format(inter_ind))
+                dic_vehicle = self.list_intersection[inter_ind].get_dic_vehicle_arrive_leave_time()
+                df = pd.DataFrame.from_dict(dic_vehicle,orient='index')
+                df.to_csv(path_to_log_file, na_rep="nan")
 
-            path_to_log_file = os.path.join(self.path_to_log, "inter_{0}.pkl".format(inter_ind))
-            f = open(path_to_log_file, "wb")
-            pickle.dump(self.list_inter_log[inter_ind], f)
-            f.close()
+                path_to_log_file = os.path.join(self.path_to_log, "inter_{0}.pkl".format(inter_ind))
+                f = open(path_to_log_file, "wb")
+                pickle.dump(self.list_inter_log[inter_ind], f)
+                f.close()
+        except Exception as e:
+            import traceback
+            print("batch_log FAILED for inter_ind={0}: {1}".format(inter_ind, traceback.format_exc()))
+
 
     def bulk_log_multi_process(self, batch_size=100):
         assert len(self.list_intersection) == len(self.list_inter_log)
@@ -1137,9 +1152,14 @@ class AnonEnv:
             f = open(path_to_log_file, "wb")
             pickle.dump(self.list_inter_log[inter_ind], f)
             f.close()
+            """print("Wrote {0}, size={1}, data_len={2}".format(
+            path_to_log_file,
+            os.path.getsize(path_to_log_file),
+            len(self.list_inter_log[inter_ind])
+            ))"""
 
-        self.eng.print_log(os.path.join(self.path_to_log, self.dic_traffic_env_conf["ROADNET_FILE"]),
-                           os.path.join(self.path_to_log, "replay_1_1.txt"))
+        #self.eng.print_log(os.path.join(self.path_to_log, self.dic_traffic_env_conf["ROADNET_FILE"]),
+                           #os.path.join(self.path_to_log, "replay_1_1.txt"))
 
         #print("log files:", os.path.join("data", "frontend", "roadnet_1_1_test.json"))
 
@@ -1302,12 +1322,34 @@ class AnonEnv:
                             traffic_light_node_dict[i]['entering_lane_ENWS']['lane_ids'].append(neighboring_lanes)
                             traffic_light_node_dict[i]['entering_lane_ENWS']['lane_length'].append(value['length'])
 
+            n_row = self.dic_traffic_env_conf["NUM_ROW"]
+            n_col = self.dic_traffic_env_conf["NUM_COL"]
+            topology = self.dic_traffic_env_conf.get("TOPOLOGY", "default")
+
+            topo_matrix = None
+            if topology == "grid":
+                topo_matrix = build_grid_adjacency(n_row, n_col)
+            elif topology == "torus":
+                topo_matrix = build_torus_adjacency(n_row, n_col)
+            elif topology == "none":
+                topo_matrix = build_none_adjacency(n_row, n_col)
+            elif topology == "optimal":
+                topo_matrix = build_optimal_adjacency(n_row, n_col)
 
             for i in traffic_light_node_dict.keys():
                 location_1 = traffic_light_node_dict[i]['location']
 
                 # TODO return with Top K results
-                if not self.dic_traffic_env_conf['ADJACENCY_BY_CONNECTION_OR_GEO']: # use geo-distance
+                if topo_matrix is not None:
+                    my_index = inter_id_to_index[i]
+                    row = topo_matrix[my_index]
+                    neighbors = [j for j in range(total_inter_num) if row[j] == 1]
+                    adjacency_row = [my_index] + neighbors
+                    while len(adjacency_row) < top_k:
+                        adjacency_row.append(my_index)
+                    adjacency_row = adjacency_row[:top_k]   # ← add this
+                    traffic_light_node_dict[i]['adjacency_row'] = adjacency_row
+                elif not self.dic_traffic_env_conf['ADJACENCY_BY_CONNECTION_OR_GEO']: # use geo-distance
                     row = np.array([0]*total_inter_num)
                     # row = np.zeros((self.dic_traffic_env_conf["NUM_ROW"],self.dic_traffic_env_conf["NUM_col"]))
                     for j in traffic_light_node_dict.keys():
@@ -1420,13 +1462,36 @@ class AnonEnv:
                 adjacency_matrix_lane[i] = [_get_top_k_lane(lane_id_dict[i]['input_lanes'], top_k_lane),
                                             _get_top_k_lane(lane_id_dict[i]['output_lanes'], top_k_lane)]
 
+            n_row = self.dic_traffic_env_conf["NUM_ROW"]
+            n_col = self.dic_traffic_env_conf["NUM_COL"]
+            topology = self.dic_traffic_env_conf.get("TOPOLOGY", "default")
 
+            topo_matrix = None
+            if topology == "grid":
+                topo_matrix = build_grid_adjacency(n_row, n_col)
+            elif topology == "torus":
+                topo_matrix = build_torus_adjacency(n_row, n_col)
+            elif topology == "none":
+                topo_matrix = build_none_adjacency(n_row, n_col)
+            elif topology == "optimal":
+                topo_matrix = build_optimal_adjacency(n_row, n_col)
 
             for i in traffic_light_node_dict.keys():
                 location_1 = traffic_light_node_dict[i]['location']
 
                 # TODO return with Top K results
-                if not self.dic_traffic_env_conf['ADJACENCY_BY_CONNECTION_OR_GEO']: # use geo-distance
+                if topo_matrix is not None:
+                    my_index = inter_id_to_index[i]
+                    row = topo_matrix[my_index]
+                    neighbors = [j for j in range(total_inter_num) if row[j] == 1]
+                    adjacency_row = [my_index] + neighbors
+                    while len(adjacency_row) < top_k:
+                        adjacency_row.append(my_index)
+                    adjacency_row = adjacency_row[:top_k]   # ← add this
+                    traffic_light_node_dict[i]['adjacency_row'] = adjacency_row
+                    print(f"[Topology] Using topology='{topology}', λ₂={compute_lambda2(topo_matrix):.4f}")
+
+                elif not self.dic_traffic_env_conf['ADJACENCY_BY_CONNECTION_OR_GEO']: # use geo-distance
                     row = np.array([0]*total_inter_num)
                     # row = np.zeros((self.dic_traffic_env_conf["NUM_ROW"],self.dic_traffic_env_conf["NUM_col"]))
                     for j in traffic_light_node_dict.keys():
@@ -1455,6 +1520,9 @@ class AnonEnv:
                 traffic_light_node_dict[i]['adjacency_matrix_lane'] = adjacency_matrix_lane
 
 
+        print("[Topology] Sample adjacency rows:")
+        for idx, key in enumerate(list(traffic_light_node_dict.keys())[:5]):
+            print(f"  inter {idx} ({key}): {traffic_light_node_dict[key]['adjacency_row']}")
 
         return traffic_light_node_dict
 

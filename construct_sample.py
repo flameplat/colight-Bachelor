@@ -21,6 +21,10 @@ class ConstructSample:
 
         try:
             f_logging_data = open(os.path.join(self.path_to_samples, folder, "inter_{0}.pkl".format(i)), "rb")
+           # print("load_data: size = {0}, path = {1}".format(
+            #os.path.getsize(os.path.join(self.path_to_samples, folder, "inter_{0}.pkl".format(i))), 
+          #  os.path.join(self.path_to_samples, folder, "inter_{0}.pkl".format(i))
+          #  ))
             logging_data = pickle.load(f_logging_data)
             f_logging_data.close()
             return 1, logging_data
@@ -225,7 +229,11 @@ class ConstructSample:
             if "generator" not in folder:
                 continue
 
-            if not self.evaluate_sample(folder) or not self.load_data_for_system(folder):
+            if not self.evaluate_sample(folder):
+                print("SKIPPING folder {0}: evaluate_sample failed".format(folder))
+                continue
+            if not self.load_data_for_system(folder):
+                print("SKIPPING folder {0}: load_data_for_system failed (likely empty or corrupt inter_X.pkl files)".format(folder))
                 continue
 
             for i in range(self.dic_traffic_env_conf['NUM_INTERSECTIONS']):
@@ -289,7 +297,7 @@ class ConstructSample:
 
 if __name__=="__main__":
     path_to_samples = "/Users/Wingslet/PycharmProjects/RLSignal/records/test/anon_3_3_test/train_round"
-    generator_folder = "generator_0"
+    
 
     dic_traffic_env_conf  = {
 

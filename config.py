@@ -134,6 +134,8 @@ dic_traffic_env_conf = {
     "THREADNUM": 8,
     "SAVEREPLAY": True,
     "RLTRAFFICLIGHT": True,
+    "TOPOLOGY": "optimal",   # options: "grid", "torus", "none", "optimal"
+
 
     "DIC_FEATURE_DIM": dict(
         D_LANE_QUEUE_LENGTH=(4,),

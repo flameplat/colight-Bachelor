@@ -26,7 +26,8 @@ class Updater:
 
 
         #temporay path_to_log
-        self.path_to_log=os.path.join(self.dic_path["PATH_TO_WORK_DIRECTORY"], "train_round", "round_0", "generator_0")
+        self.path_to_log = os.path.join(self.dic_path["PATH_TO_WORK_DIRECTORY"], "train_round", "round_" + str(cnt_round), "updater_tmp")
+        os.makedirs(self.path_to_log, exist_ok=True)
         env_tmp = DIC_ENVS[dic_traffic_env_conf["SIMULATOR_TYPE"]](
                               path_to_log = self.path_to_log,
                               path_to_work_directory = self.dic_path["PATH_TO_WORK_DIRECTORY"],
