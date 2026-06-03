@@ -23,7 +23,6 @@ multi_process = True
 TOP_K_ADJACENCY=-1
 TOP_K_ADJACENCY_LANE=-1
 PRETRAIN=False
-NUM_ROUNDS=50
 EARLY_STOP=True 
 NEIGHBOR=False
 SAVEREPLAY=False
@@ -40,6 +39,9 @@ def parse_args():
     parser.add_argument("--road_net", type=str, default='6_6')#'1_2') # which road net you are going to run
     parser.add_argument("--volume", type=str, default='900')#'300'
     parser.add_argument("--suffix", type=str, default="0.3_turn_drain")#0.3
+    parser.add_argument("--rounds", type=int, default=10)
+    parser.add_argument("--topology", type=str, default=None)
+
 
     global hangzhou_archive
     hangzhou_archive=False
@@ -47,8 +49,6 @@ def parse_args():
     TOP_K_ADJACENCY=5
     global TOP_K_ADJACENCY_LANE
     TOP_K_ADJACENCY_LANE=5
-    global NUM_ROUNDS
-    NUM_ROUNDS=50
     global EARLY_STOP
     EARLY_STOP=False
     global NEIGHBOR
@@ -141,7 +141,7 @@ def pipeline_wrapper(dic_exp_conf, dic_agent_conf, dic_traffic_env_conf, dic_pat
 
 
 
-def main(memo, env, road_net, gui, volume, suffix, mod, cnt, gen, r_all, workers, onemodel):
+def main(memo, env, road_net, gui, volume, suffix, mod, cnt, gen, r_all, workers, onemodel, rounds, topology):
 
     # main(args.memo, args.env, args.road_net, args.gui, args.volume, args.ratio, args.mod, args.cnt, args.gen)
     #Jinan_3_4
@@ -149,6 +149,8 @@ def main(memo, env, road_net, gui, volume, suffix, mod, cnt, gen, r_all, workers
     NUM_ROW = int(road_net.split('_')[1])
     num_intersections = NUM_ROW * NUM_COL
     print('num_intersections:',num_intersections)
+    global NUM_ROUNDS
+    NUM_ROUNDS = rounds
 
     ENVIRONMENT = ["sumo", "anon"][env]
 
@@ -168,7 +170,6 @@ def main(memo, env, road_net, gui, volume, suffix, mod, cnt, gen, r_all, workers
     multi_process = True
 
     global PRETRAIN
-    global NUM_ROUNDS
     global EARLY_STOP
     for traffic_file in traffic_file_list:
         dic_exp_conf_extra = {
@@ -228,7 +229,7 @@ def main(memo, env, road_net, gui, volume, suffix, mod, cnt, gen, r_all, workers
             "SIMULATOR_TYPE": ENVIRONMENT,
             "BINARY_PHASE_EXPANSION": True,
             "FAST_COMPUTE": True,
-
+            "TOPOLOGY": topology,
             "NEIGHBOR": NEIGHBOR,
             "MODEL_NAME": mod,
 
@@ -510,7 +511,7 @@ if __name__ == "__main__":
 
     main(args.memo, args.env, args.road_net, args.gui, args.volume,
          args.suffix, args.mod, args.cnt, args.gen, args.all, args.workers,
-         args.onemodel)
+         args.onemodel, args.rounds, args.topology)
 
 
 
