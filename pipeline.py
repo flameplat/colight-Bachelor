@@ -1,6 +1,8 @@
 import json
 import os
 import shutil
+import multiprocessing
+multiprocessing.set_start_method("spawn", force=True)
 import xml.etree.ElementTree as ET
 from generator import Generator
 from construct_sample import ConstructSample
