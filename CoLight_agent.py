@@ -12,12 +12,12 @@ import keras
 from keras import backend as K
 from keras.optimizers import Adam, RMSprop
 import tensorflow as tf
-from keras.layers import Dense, Dropout, Conv2D, Input, Lambda, Flatten, TimeDistributed, merge
+from keras.layers import Dense, Dropout, Conv2D, Input, Lambda, Flatten, TimeDistributed
 from keras.layers import Add, Reshape, MaxPooling2D, Concatenate, Embedding, RepeatVector
-from keras.models import Model, model_from_json, load_model
-from keras.layers.core import Activation
-from keras.utils import np_utils,to_categorical
-from keras.engine.topology import Layer
+from keras.models import Model, model_from_json, load_model, clone_model
+from keras.layers import Activation
+from keras.utils import to_categorical
+from keras.layers import Layer
 from keras.callbacks import EarlyStopping, TensorBoard
 
 # SEED=6666
@@ -25,7 +25,7 @@ from keras.callbacks import EarlyStopping, TensorBoard
 # np.random.seed(SEED)
 # tf.set_random_seed(SEED)
 
-
+@keras.saving.register_keras_serializable()
 class RepeatVector3D(Layer):
     def __init__(self,times,**kwargs):
         super(RepeatVector3D, self).__init__(**kwargs)
@@ -38,13 +38,43 @@ class RepeatVector3D(Layer):
         #[batch,agent,dim]->[batch,1,agent,dim]
         #[batch,1,agent,dim]->[batch,agent,agent,dim]
 
-        return K.tile(K.expand_dims(inputs,1),[1,self.times,1,1])
+        return tf.tile(tf.expand_dims(inputs,1),[1,self.times,1,1])
 
 
     def get_config(self):
         config = {'times': self.times}
         base_config = super(RepeatVector3D, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
+
+@keras.saving.register_keras_serializable()
+class NeighborAgg(Layer):
+    def call(self, inputs):
+        return tf.matmul(inputs[0], inputs[1])
+    def get_config(self):
+        return super().get_config()
+
+@keras.saving.register_keras_serializable()
+class AttentionScore(Layer):
+    def call(self, inputs):
+        return tf.nn.softmax(tf.matmul(inputs[0], inputs[1], transpose_b=True))
+    def get_config(self):
+        return super().get_config()
+
+@keras.saving.register_keras_serializable()
+class WeightedAgg(Layer):
+    def call(self, inputs):
+        return tf.reduce_mean(tf.matmul(inputs[0], inputs[1]), axis=2)
+    def get_config(self):
+        return super().get_config()
+
+@keras.saving.register_keras_serializable()
+class Permute5D(Layer):
+    def call(self, x):
+        return tf.transpose(x, perm=[0, 1, 4, 2, 3])
+    def get_config(self):
+        return super().get_config()
+
+
 
 class CoLightAgent(Agent): 
     def __init__(self, 
@@ -81,7 +111,7 @@ class CoLightAgent(Agent):
             self.q_network = self.build_network()
             if os.listdir(self.dic_path["PATH_TO_MODEL"]):
                 self.q_network.load_weights(
-                    os.path.join(self.dic_path["PATH_TO_MODEL"], "round_0_inter_{0}.h5".format(intersection_id)), 
+                    os.path.join(self.dic_path["PATH_TO_MODEL"], "round_0_inter_{0}.weights.h5".format(intersection_id)), 
                     by_name=True)
             self.q_network_bar = self.build_network_from_copy(self.q_network)
         else:
@@ -125,9 +155,8 @@ class CoLightAgent(Agent):
                     else:
                         self.load_network_bar("round_{0}_inter_{1}".format(
                             max(cnt_round - self.dic_agent_conf["UPDATE_Q_BAR_FREQ"], 0), self.intersection_id))
-            except:
-                print("fail to load network, current round: {0}".format(cnt_round))
-
+            except Exception as e:
+                print("fail to load network, current round: {0}, error: {1}".format(cnt_round, e))
         # decay the epsilon
         """
         "EPSILON": 0.8,
@@ -137,7 +166,7 @@ class CoLightAgent(Agent):
         if os.path.exists(
             os.path.join(
                 self.dic_path["PATH_TO_MODEL"], 
-                "round_-1_inter_{0}.h5".format(intersection_id))):
+                "round_-1_inter_{0}.weights.h5".format(intersection_id))):
             #the 0-th model is pretrained model
             self.dic_agent_conf["EPSILON"] = self.dic_agent_conf["MIN_EPSILON"]
             print('round%d, EPSILON:%.4f'%(cnt_round,self.dic_agent_conf["EPSILON"]))
@@ -203,9 +232,10 @@ class CoLightAgent(Agent):
         """
         #[batch,agent,dim]->(reshape)[batch,1,agent,dim]->(tile)[batch,agent,agent,dim]
         neighbor_repr=RepeatVector3D(self.num_agents)(In_agent)
+
         print("neighbor_repr.shape", neighbor_repr.shape)
         #[batch,agent,neighbor,agent]x[batch,agent,agent,dim]->[batch,agent,neighbor,dim]
-        neighbor_repr=Lambda(lambda x:K.batch_dot(x[0],x[1]))([In_neighbor,neighbor_repr])
+        neighbor_repr = NeighborAgg()([In_neighbor, neighbor_repr])
         print("neighbor_repr.shape", neighbor_repr.shape)
         """
         attention computation
@@ -215,7 +245,7 @@ class CoLightAgent(Agent):
         agent_repr_head=Dense(dv*nv,activation='relu',kernel_initializer='random_normal',name='agent_repr_%d'%suffix)(agent_repr)
         #[batch,agent,1,dv,nv]->[batch,agent,nv,1,dv]
         agent_repr_head=Reshape((self.num_agents,1,dv,nv))(agent_repr_head)
-        agent_repr_head=Lambda(lambda x:K.permute_dimensions(x,(0,1,4,2,3)))(agent_repr_head)
+        agent_repr_head=Permute5D()(agent_repr_head)
         #agent_repr_head=Lambda(lambda x:K.permute_dimensions(K.reshape(x,(-1,self.num_agents,1,dv,nv)),(0,1,4,2,3)))(agent_repr_head)
         #[batch,agent,neighbor,dim]->[batch,agent,neighbor,dv*nv]
 
@@ -224,10 +254,10 @@ class CoLightAgent(Agent):
         print("DEBUG",neighbor_repr_head.shape)
         print("self.num_agents,self.num_neighbors,dv,nv", self.num_agents,self.num_neighbors,dv,nv)
         neighbor_repr_head=Reshape((self.num_agents,self.num_neighbors,dv,nv))(neighbor_repr_head)
-        neighbor_repr_head=Lambda(lambda x:K.permute_dimensions(x,(0,1,4,2,3)))(neighbor_repr_head)
+        neighbor_repr_head=Permute5D()(neighbor_repr_head)
         #neighbor_repr_head=Lambda(lambda x:K.permute_dimensions(K.reshape(x,(-1,self.num_agents,self.num_neighbors,dv,nv)),(0,1,4,2,3)))(neighbor_repr_head)        
         #[batch,agent,nv,1,dv]x[batch,agent,nv,neighbor,dv]->[batch,agent,nv,1,neighbor]
-        att=Lambda(lambda x:K.softmax(K.batch_dot(x[0],x[1],axes=[4,4])))([agent_repr_head,neighbor_repr_head])
+        att = AttentionScore()([agent_repr_head, neighbor_repr_head])
         #[batch,agent,nv,1,neighbor]->[batch,agent,nv,neighbor]
         att_record=Reshape((self.num_agents,nv,self.num_neighbors))(att)
 
@@ -235,8 +265,8 @@ class CoLightAgent(Agent):
         #self embedding again
         neighbor_hidden_repr_head=Dense(dv*nv,activation='relu',kernel_initializer='random_normal',name='neighbor_hidden_repr_%d'%suffix)(neighbor_repr)
         neighbor_hidden_repr_head=Reshape((self.num_agents,self.num_neighbors,dv,nv))(neighbor_hidden_repr_head)
-        neighbor_hidden_repr_head=Lambda(lambda x:K.permute_dimensions(x,(0,1,4,2,3)))(neighbor_hidden_repr_head)
-        out=Lambda(lambda x:K.mean(K.batch_dot(x[0],x[1]),axis=2))([att,neighbor_hidden_repr_head])
+        neighbor_hidden_repr_head=Permute5D()(neighbor_hidden_repr_head)
+        out = WeightedAgg()([att, neighbor_hidden_repr_head])
         out=Reshape((self.num_agents,dv))(out)
         out = Dense(dout, activation = "relu",kernel_initializer='random_normal',name='MLP_after_relation_%d'%suffix)(out)
         return out,att_record
@@ -263,7 +293,7 @@ class CoLightAgent(Agent):
         #state:[batch,agent,features and adj]
         #return:act:[batch,agent],att:[batch,layers,agent,head,neighbors]
         batch_size=len(state)
-        if total_features==[] and total_adjs==[]:
+        if len(total_features)==0 and len(total_adjs)==0:
             total_features,total_adjs=list(),list()
             for i in range(batch_size): 
                 feature=[]
@@ -477,15 +507,16 @@ class CoLightAgent(Agent):
 
         if self.att_regulatization:
             model.compile(
-                optimizer=RMSprop(lr=self.dic_agent_conf["LEARNING_RATE"]),
+                optimizer=RMSprop(learning_rate=self.dic_agent_conf["LEARNING_RATE"]),
                 loss=[self.dic_agent_conf["LOSS_FUNCTION"],'kullback_leibler_divergence'],
                 loss_weights=[1,self.dic_agent_conf["rularization_rate"]])
         else:
             model.compile(
-                optimizer=RMSprop(lr=self.dic_agent_conf["LEARNING_RATE"]),
-                loss=self.dic_agent_conf["LOSS_FUNCTION"],
-                loss_weights=[1,0])
-        # model.compile(optimizer=Adam(lr = 0.0001), loss='mse')
+                optimizer=RMSprop(learning_rate=self.dic_agent_conf["LEARNING_RATE"]),
+                loss=[self.dic_agent_conf["LOSS_FUNCTION"], None],
+                loss_weights=[1,0], 
+                run_eagerly=True)
+        # model.compile(optimizer=Adam(learning_rate = 0.0001), loss='mse')
         model.summary()
         network_end=time.time()
         print('build_Input_end_time：',Input_end_time-start_time)
@@ -514,52 +545,38 @@ class CoLightAgent(Agent):
         hist = self.q_network.fit(self.Xs, self.Y_total, batch_size=batch_size, epochs=epochs,
                                   shuffle=False,
                                   verbose=2, validation_split=0.3,
-                                  callbacks=[early_stopping,TensorBoard(log_dir='./temp.tensorboard')])
+                                  callbacks=[early_stopping])
 
     def build_network_from_copy(self, network_copy):
-
-        '''Initialize a Q network from a copy'''
-        network_structure = network_copy.to_json()
-        network_weights = network_copy.get_weights()
-        network = model_from_json(network_structure, custom_objects={"RepeatVector3D": RepeatVector3D})
-        network.set_weights(network_weights)
-
-        if self.att_regulatization:
-            network.compile(
-                optimizer=RMSprop(lr=self.dic_agent_conf["LEARNING_RATE"]),
-                loss=[self.dic_agent_conf["LOSS_FUNCTION"] for i in range(self.num_agents)]+['kullback_leibler_divergence'],
-                loss_weights=[1,self.dic_agent_conf["rularization_rate"]])
-        else:
-            network.compile(
-                optimizer=RMSprop(lr=self.dic_agent_conf["LEARNING_RATE"]),
-                loss=self.dic_agent_conf["LOSS_FUNCTION"],
-                loss_weights=[1,0])
-
+        network = self.build_network()
+        network.set_weights(network_copy.get_weights())
         return network
 
-    def load_network(self, file_name, file_path=None):
-        if file_path == None:
-            file_path = self.dic_path["PATH_TO_MODEL"]
 
-        self.q_network = load_model(
-            os.path.join(file_path, "%s.h5" % file_name),
-            custom_objects={'RepeatVector3D':RepeatVector3D})
-        print("succeed in loading model %s"%file_name)
+
+    def load_network(self, file_name, file_path=None):
+        if file_path is None:
+            file_path = self.dic_path["PATH_TO_MODEL"]
+        self.q_network = self.build_network()
+        self.q_network.load_weights(
+            os.path.join(file_path, "%s.weights.h5" % file_name))
+        print("succeed in loading model %s" % file_name)
 
     def load_network_bar(self, file_name, file_path=None):
-        if file_path == None:
+        if file_path is None:
             file_path = self.dic_path["PATH_TO_MODEL"]
-        self.q_network_bar = load_model(
-            os.path.join(file_path, "%s.h5" % file_name),
-            custom_objects={'RepeatVector3D':RepeatVector3D})
-        print("succeed in loading model %s"%file_name) 
+        self.q_network_bar = self.build_network()
+        self.q_network_bar.load_weights(
+            os.path.join(file_path, "%s.weights.h5" % file_name))
+        print("succeed in loading model bar %s" % file_name)
 
     def save_network(self, file_name):
-        self.q_network.save(os.path.join(self.dic_path["PATH_TO_MODEL"], "%s.h5" % file_name))
+        self.q_network.save_weights(
+            os.path.join(self.dic_path["PATH_TO_MODEL"], "%s.weights.h5" % file_name))
 
     def save_network_bar(self, file_name):
-        self.q_network_bar.save(os.path.join(self.dic_path["PATH_TO_MODEL"], "%s.h5" % file_name))
-
+        self.q_network_bar.save_weights(
+            os.path.join(self.dic_path["PATH_TO_MODEL"], "%s.weights.h5" % file_name))
 
 
 if __name__=='__main__':

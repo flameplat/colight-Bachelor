@@ -1,0 +1,25 @@
+# CoLight GPU Environment
+# Python version: 3.10.14
+# Platform: macOS Apple Silicon (M-series)
+# Last updated: 2026-06-03
+
+# TensorFlow with Metal GPU acceleration
+tensorflow-macos==2.16.2
+tensorflow-metal==1.2.0
+
+# Keras (bundled with tensorflow-macos 2.16.2)
+# keras==3.14.1  # installed automatically
+
+# CoLight core dependencies
+networkx
+pandas
+matplotlib
+scipy
+
+# Traffic simulator (must be built from source on Apple Silicon)
+# CityFlow: https://github.com/cityflow-project/CityFlow
+# Build instructions:
+#   1. Fix CMakeLists.txt: cmake_minimum_required(VERSION 3.5)
+#   2. Fix extern/pybind11/CMakeLists.txt: cmake_minimum_required(VERSION 3.5)
+#   3. Fix extern/pybind11/tools/pybind11Tools.cmake: cmake_minimum_required(VERSION 3.5)
+#   4. pip install .

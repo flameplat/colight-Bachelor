@@ -5,9 +5,9 @@ from network_agent import NetworkAgent, Selector
 import numpy as np
 from keras.layers import Input,  Multiply, Add
 from keras.models import Model
-from keras.optimizers import RMSprop
+from keras.optimizers.legacy import RMSprop
 
-from keras.layers.merge import concatenate
+from keras.layers import concatenate
 
 
 class LitAgent(NetworkAgent): 

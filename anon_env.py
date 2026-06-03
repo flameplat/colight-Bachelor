@@ -11,6 +11,7 @@ import os
 import cityflow as engine
 import time
 import threading
+import networkx as nx
 from multiprocessing import Process, Pool
 from script import get_traffic_volume
 from copy import deepcopy
@@ -820,11 +821,48 @@ class AnonEnv:
         with open(os.path.join(self.path_to_log, "cityflow.config"), "w") as json_file:
             json.dump(cityflow_config, json_file)
         self.eng = engine.Engine(os.path.join(self.path_to_log, "cityflow.config"), thread_num=1)
+        # Build road network graph for dynamic routing
+        self.road_graph = nx.DiGraph()
+        roadnet_path = os.path.join(self.path_to_work_directory,
+                                        self.dic_traffic_env_conf["ROADNET_FILE"])
+        with open(roadnet_path) as f:
+            roadnet = json.load(f)
 
-# self.load_roadnet()
+        self.road_info = {}  # road_id -> {length, speed, lanes, start, end}
+        for road in roadnet["roads"]:
+            rid = road["id"]
+            pts = road["points"]
+            length = ((pts[-1]["x"]-pts[0]["x"])**2 + (pts[-1]["y"]-pts[0]["y"])**2) ** 0.5
+            speed = road["lanes"][0]["maxSpeed"]
+            n_lanes = len(road["lanes"])
+            start = road["startIntersection"]
+            end = road["endIntersection"]
+            self.road_info[rid] = {"length": length, "speed": speed,
+                                    "lanes": n_lanes, "start": start, "end": end}
+            t_free = length / speed
+            self.road_graph.add_edge(start, end, road_id=rid,
+                                    length=length, speed=speed,
+                                    lanes=n_lanes, travel_time=t_free)
+
+         # self.load_roadnet()
         # self.load_flow()
 
 
+        # Parse flow file to get vehicle O-D pairs
+        
+        flow_path = os.path.join(self.path_to_work_directory,
+                                self.dic_traffic_env_conf["TRAFFIC_FILE"])
+        with open(flow_path) as f:
+            flow_data = json.load(f)
+
+        self.flow_od = {}  # flow_index -> {"origin": start_intersection, "dest": end_intersection}
+        for i, entry in enumerate(flow_data):
+            first_road = entry["route"][0]
+            last_road  = entry["route"][-1]
+            origin = self.road_info[first_road]["start"]
+            dest   = self.road_info[last_road]["end"]
+            self.flow_od[i] = {"origin": origin, "dest": dest}
+        
         # get adjacency
         if self.dic_traffic_env_conf["USE_LANE_ADJACENCY"]:
             self.traffic_light_node_dict = self._adjacency_extraction_lane()
@@ -932,6 +970,10 @@ class AnonEnv:
 
             self._inner_step(action_in_sec)
 
+            if instant_time % 60 == 0:
+                self._update_travel_times()
+                self._reroute_vehicles()
+
 
             # get reward
             if self.dic_traffic_env_conf['DEBUG']:
@@ -956,8 +998,74 @@ class AnonEnv:
         print("Step time: ", time.time() - step_start_time)
         return next_state, reward, done, average_reward_action_list
 
-    def _inner_step(self, action):
+    def _update_travel_times(self):
+        lane_counts = self.eng.get_lane_vehicle_count()
+        
+        for rid, info in self.road_info.items():
+            volume = sum(v for lane, v in lane_counts.items()
+                         if lane.startswith(rid + "_"))
+            capacity = info["lanes"] * 0.9 * info["length"] / 7.5
+            t_free = info["length"] / info["speed"]
+            vc = volume / capacity if capacity > 0 else 0
+            travel_time = t_free * (1 + 0.15 * (vc ** 4))
+            self.road_graph[info["start"]][info["end"]]["travel_time"] = travel_time
+            
+    def _reroute_vehicles(self):
+        for vid in self.eng.get_vehicles(include_waiting=False):
+            try:
+                info = self.eng.get_vehicle_info(vid)
+                if info.get("running") != "1" or "road" not in info:
+                    continue
 
+                # extract flow index from vehicle id e.g. "flow_3_7" -> 3
+                try:
+                    flow_idx = int(vid.split("_")[1])
+                except (IndexError, ValueError):
+                    print(f"[reroute] WARNING: cannot parse flow index from vehicle id '{vid}'")
+                    continue
+
+                if flow_idx not in self.flow_od:
+                    print(f"[reroute] WARNING: flow index {flow_idx} not in flow_od for vehicle '{vid}'")
+                    continue
+
+                current_road = info["road"]
+                dest = self.flow_od[flow_idx]["dest"]
+
+                if current_road not in self.road_info:
+                    print(f"[reroute] WARNING: current road '{current_road}' not in road_info for vehicle '{vid}'")
+                    continue
+
+                current_intersection = self.road_info[current_road]["end"]
+
+                if current_intersection == dest:
+                    continue  # already at last road
+
+                if current_intersection not in self.road_graph or dest not in self.road_graph:
+                    print(f"[reroute] WARNING: node missing in graph — from '{current_intersection}' to '{dest}'")
+                    continue
+
+                try:
+                    path = nx.shortest_path(
+                        self.road_graph, current_intersection, dest, weight="travel_time"
+                    )
+                except nx.NetworkXNoPath:
+                    print(f"[reroute] WARNING: no path found from '{current_intersection}' to '{dest}' for vehicle '{vid}'")
+                    continue
+
+                # convert intersection path to road list
+                new_route = [current_road] + [
+                    self.road_graph[path[i]][path[i+1]]["road_id"]
+                    for i in range(len(path) - 1)
+                ]
+
+                original_route = info["route"].split()
+                self.eng.set_vehicle_route(vid, new_route)
+
+            except Exception as e:
+                print(f"[reroute] ERROR: unexpected error for vehicle '{vid}': {e}")
+    
+    
+    def _inner_step(self, action):
         # copy current measurements to previous measurements
         for inter in self.list_intersection:
             inter.update_previous_measurements()

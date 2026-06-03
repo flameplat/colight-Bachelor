@@ -11,7 +11,7 @@ import matplotlib
 import warnings
 warnings.filterwarnings('ignore', message='.*synonym of type.*', category=FutureWarning)
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
-tf.logging.set_verbosity(tf.logging.ERROR)
+import logging; logging.getLogger("tensorflow").setLevel(logging.ERROR)
 
 # matplotlib.use('TkAgg')
 
@@ -32,12 +32,12 @@ ANON_PHASE_REPRE=[]
 def parse_args():
     parser = argparse.ArgumentParser()
     # The file folder to create/log in
-    parser.add_argument("--memo", type=str, default='topology_optimal_colight_6_6_900_turn__bi')#1_3,2_2,3_3,4_4
+    parser.add_argument("--memo", type=str, default='pilot_grid')#1_3,2_2,3_3,4_4
     parser.add_argument("--env", type=int, default=1) #env=1 means you will run CityFlow
     parser.add_argument("--gui", type=bool, default=False)
     parser.add_argument("--road_net", type=str, default='6_6')#'1_2') # which road net you are going to run
     parser.add_argument("--volume", type=str, default='900')#'300'
-    parser.add_argument("--suffix", type=str, default="0.3_turn")#0.3
+    parser.add_argument("--suffix", type=str, default="0.3_turn_drain")#0.3
 
     global hangzhou_archive
     hangzhou_archive=False
@@ -69,7 +69,7 @@ def parse_args():
     parser.add_argument("--workers",type=int, default=7)
     parser.add_argument("--onemodel",type=bool, default=False)
 
-    parser.add_argument("--visible_gpu", type=str, default="-1")
+    parser.add_argument("--visible_gpu", type=str, default="")
     global ANON_PHASE_REPRE
     tt=parser.parse_args()
     if 'CoLight_Signal' in tt.mod:
@@ -493,10 +493,18 @@ def main(memo, env, road_net, gui, volume, suffix, mod, cnt, gen, r_all, workers
 
 
 if __name__ == "__main__":
+
     args = parse_args()
     #memo = "multi_phase/optimal_search_new/new_headway_anon"
+    gpus = tf.config.list_physical_devices('GPU')
+    if gpus:
+        tf.config.experimental.set_memory_growth(gpus[0], True)
+        print(f"Training on GPU: {gpus[0]}")
+    else:
+        print("WARNING: No GPU found, training on CPU")
 
-    os.environ["CUDA_VISIBLE_DEVICES"] = args.visible_gpu
+    if args.visible_gpu != "":
+        os.environ["CUDA_VISIBLE_DEVICES"] = args.visible_gpu
 
     main(args.memo, args.env, args.road_net, args.gui, args.volume,
          args.suffix, args.mod, args.cnt, args.gen, args.all, args.workers,

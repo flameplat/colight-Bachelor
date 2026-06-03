@@ -13,3 +13,8 @@ temp.tensorboard/
 __pycache__/
 *.pyc
 *.pyo
+
+# Environments and logs
+tf_metal_env/
+errors/
+keras_imports.txt

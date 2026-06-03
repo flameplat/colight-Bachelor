@@ -16,6 +16,8 @@ from math import isnan
 import sys
 import time
 import traceback
+import tensorflow as tf
+
 
 class Pipeline:
     _LIST_SUMO_FILES = [
@@ -180,6 +182,9 @@ class Pipeline:
 
     def generator_wrapper(self, cnt_round, cnt_gen, dic_path, dic_exp_conf, dic_agent_conf, dic_traffic_env_conf,
                           best_round=None):
+        gpus = tf.config.list_physical_devices('GPU')
+        if gpus:
+            tf.config.experimental.set_memory_growth(gpus[0], True)
         generator = Generator(cnt_round=cnt_round,
                               cnt_gen=cnt_gen,
                               dic_path=dic_path,
@@ -194,7 +199,10 @@ class Pipeline:
         return
 
     def updater_wrapper(self, cnt_round, dic_agent_conf, dic_exp_conf, dic_traffic_env_conf, dic_path, best_round=None, bar_round=None):
-
+        tf.config.run_functions_eagerly(True)
+        gpus = tf.config.list_physical_devices('GPU')
+        if gpus:
+            tf.config.experimental.set_memory_growth(gpus[0], True)
         updater = Updater(
             cnt_round=cnt_round,
             dic_agent_conf=dic_agent_conf,
