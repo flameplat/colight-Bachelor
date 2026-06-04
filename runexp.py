@@ -33,7 +33,7 @@ ANON_PHASE_REPRE=[]
 def parse_args():
     parser = argparse.ArgumentParser()
     # The file folder to create/log in
-    parser.add_argument("--memo", type=str, default='pilot_grid')#1_3,2_2,3_3,4_4
+    parser.add_argument("--memo", type=str, default='6_6_900_turn_drain_150_optimal')#1_3,2_2,3_3,4_4
     parser.add_argument("--env", type=int, default=1) #env=1 means you will run CityFlow
     parser.add_argument("--gui", type=bool, default=False)
     parser.add_argument("--road_net", type=str, default='6_6')#'1_2') # which road net you are going to run
@@ -68,7 +68,7 @@ def parse_args():
     parser.add_argument("--gen",type=int, default=4)#4
 
     parser.add_argument("-all", action="store_true", default=False)
-    parser.add_argument("--workers",type=int, default=7)
+    parser.add_argument("--workers",type=int, default=1)
     parser.add_argument("--onemodel",type=bool, default=False)
 
     parser.add_argument("--visible_gpu", type=str, default="")

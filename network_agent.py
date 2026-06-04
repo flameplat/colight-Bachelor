@@ -327,4 +327,4 @@ class NetworkAgent(Agent):
 
         hist = self.q_network.fit(self.Xs, self.Y, batch_size=batch_size, epochs=epochs,
                                   shuffle=False,
-                                  verbose=2, validation_split=0.3, callbacks=[early_stopping])
+                                  verbose=1, validation_split=0.3, callbacks=[early_stopping])
