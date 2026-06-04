@@ -535,6 +535,7 @@ class CoLightAgent(Agent):
         else:
             epochs = self.dic_agent_conf["EPOCHS"]
         batch_size = min(self.dic_agent_conf["BATCH_SIZE"], len(self.Y))
+        print(f"Training | sample_size: {len(self.Y)} | batch_size: {batch_size} | epochs: {epochs}")
 
         early_stopping = EarlyStopping(
             monitor='val_loss', patience=self.dic_agent_conf["PATIENCE"], verbose=0, mode='min')
