@@ -41,6 +41,8 @@ def parse_args():
     parser.add_argument("--suffix", type=str, default="0.3_turn_drain")#0.3
     parser.add_argument("--rounds", type=int, default=10)
     parser.add_argument("--topology", type=str, default=None)
+    parser.add_argument("--resume", type=str, default=None,
+                        help="Path to model dir from a previous run to resume from")
 
 
     global hangzhou_archive
@@ -141,7 +143,7 @@ def pipeline_wrapper(dic_exp_conf, dic_agent_conf, dic_traffic_env_conf, dic_pat
 
 
 
-def main(memo, env, road_net, gui, volume, suffix, mod, cnt, gen, r_all, workers, onemodel, rounds, topology):
+def main(memo, env, road_net, gui, volume, suffix, mod, cnt, gen, r_all, workers, onemodel, rounds, topology, resume=None):
 
     # main(args.memo, args.env, args.road_net, args.gui, args.volume, args.ratio, args.mod, args.cnt, args.gen)
     #Jinan_3_4
@@ -455,6 +457,15 @@ def main(memo, env, road_net, gui, volume, suffix, mod, cnt, gen, r_all, workers
             "PATH_TO_ERROR": os.path.join("errors", memo)
         }
 
+        if resume:
+            import json as _json
+            ckpt = _json.load(open(os.path.join(resume, "checkpoint.json")))
+            start_round = ckpt["last_completed_round"] + 1
+            dic_exp_conf_extra["START_ROUND"] = start_round
+            dic_path_extra["PATH_TO_MODEL"] = resume
+            dic_path_extra["PATH_TO_WORK_DIRECTORY"] = ckpt["work_dir"]
+            print(f"Resuming from round {start_round}, model dir: {resume}")
+
         deploy_dic_exp_conf = merge(config.DIC_EXP_CONF, dic_exp_conf_extra)
         deploy_dic_agent_conf = merge(getattr(config, "DIC_{0}_AGENT_CONF".format(mod.upper())),
                                       dic_agent_conf_extra)
@@ -511,7 +522,7 @@ if __name__ == "__main__":
 
     main(args.memo, args.env, args.road_net, args.gui, args.volume,
          args.suffix, args.mod, args.cnt, args.gen, args.all, args.workers,
-         args.onemodel, args.rounds, args.topology)
+         args.onemodel, args.rounds, args.topology, args.resume)
 
 
 

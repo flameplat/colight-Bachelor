@@ -125,13 +125,15 @@ class Pipeline:
         self.dic_path = dic_path
 
         # do file operations
-        self._path_check()
-        self._copy_conf_file()
-        if self.dic_traffic_env_conf["SIMULATOR_TYPE"] == 'sumo':
-            self._copy_sumo_file()
-            self._modify_sumo_file()
-        elif self.dic_traffic_env_conf["SIMULATOR_TYPE"] == 'anon':
-            self._copy_anon_file()
+        resuming = self.dic_exp_conf.get("START_ROUND", 0) > 0
+        if not resuming:
+            self._path_check()
+            self._copy_conf_file()
+            if self.dic_traffic_env_conf["SIMULATOR_TYPE"] == 'sumo':
+                self._copy_sumo_file()
+                self._modify_sumo_file()
+            elif self.dic_traffic_env_conf["SIMULATOR_TYPE"] == 'anon':
+                self._copy_anon_file()
         # test_duration
         self.test_duration = []
 
@@ -289,10 +291,15 @@ class Pipeline:
     def run(self, multi_process=False):
 
         best_round, bar_round = None, None
+        start_round = self.dic_exp_conf.get("START_ROUND", 0)
 
-        f_time = open(os.path.join(self.dic_path["PATH_TO_WORK_DIRECTORY"],"running_time.csv"),"w")
-        f_time.write("generator_time\tmaking_samples_time\tupdate_network_time\ttest_evaluation_times\tall_times\n")
-        f_time.close()
+        csv_path = os.path.join(self.dic_path["PATH_TO_WORK_DIRECTORY"], "running_time.csv")
+        if start_round == 0:
+            f_time = open(csv_path, "w")
+            f_time.write("generator_time\tmaking_samples_time\tupdate_network_time\ttest_evaluation_times\tall_times\n")
+            f_time.close()
+        else:
+            print(f"Resuming from round {start_round}")
 
         if self.dic_exp_conf["PRETRAIN"]:
             if os.listdir(self.dic_path["PATH_TO_PRETRAIN_MODEL"]): 
@@ -389,7 +396,7 @@ class Pipeline:
         self.dic_exp_conf["AGGREGATE"] = False
 
         # trainf
-        for cnt_round in range(self.dic_exp_conf["NUM_ROUNDS"]):
+        for cnt_round in range(start_round, self.dic_exp_conf["NUM_ROUNDS"]):
             print("round %d starts" % cnt_round)
             round_start_time = time.time()
 
@@ -567,4 +574,13 @@ class Pipeline:
                                                           time.time()-round_start_time))
             f_time.close()
 
+            if cnt_round % 5 == 4:
+                import json as _json
+                with open(os.path.join(self.dic_path["PATH_TO_MODEL"], "checkpoint.json"), "w") as _f_ckpt:
+                    _json.dump({
+                        "last_completed_round": cnt_round,
+                        "model_dir": self.dic_path["PATH_TO_MODEL"],
+                        "work_dir": self.dic_path["PATH_TO_WORK_DIRECTORY"],
+                    }, _f_ckpt)
+                print(f"Checkpoint saved at round {cnt_round}")
 
