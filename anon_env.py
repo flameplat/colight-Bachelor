@@ -1584,6 +1584,9 @@ class AnonEnv:
             elif topology == "optimal":
                 topo_matrix = build_optimal_adjacency(n_row, n_col)
 
+            if topo_matrix is not None:
+                print(f"[Topology] Using topology='{topology}', λ₂={compute_lambda2(topo_matrix):.4f}")
+
             for i in traffic_light_node_dict.keys():
                 location_1 = traffic_light_node_dict[i]['location']
 
@@ -1597,7 +1600,6 @@ class AnonEnv:
                         adjacency_row.append(my_index)
                     adjacency_row = adjacency_row[:top_k]   # ← add this
                     traffic_light_node_dict[i]['adjacency_row'] = adjacency_row
-                    print(f"[Topology] Using topology='{topology}', λ₂={compute_lambda2(topo_matrix):.4f}")
 
                 elif not self.dic_traffic_env_conf['ADJACENCY_BY_CONNECTION_OR_GEO']: # use geo-distance
                     row = np.array([0]*total_inter_num)
