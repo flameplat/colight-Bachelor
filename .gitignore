@@ -5,6 +5,10 @@ model/
 records/
 summary/
 temp.tensorboard/
+frontend/web/replays/
+frontend/web/replayLogFile.txt
+frontend/web/roadnetLogFile.json
+analysis_output/
 
 # macOS
 .DS_Store
