@@ -18,6 +18,8 @@ __pycache__/
 *.pyc
 *.pyo
 
+CLAUDE_CODE_CONTEXT.md
+
 # Environments and logs
 tf_metal_env/
 errors/
