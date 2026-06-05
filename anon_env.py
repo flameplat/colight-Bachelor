@@ -798,6 +798,12 @@ class AnonEnv:
             f = open(path_to_log_file, "wb")
             f.close()
 
+    def _replay_path(self, filename):
+        run_name = os.path.basename(os.path.normpath(self.path_to_work_directory))
+        replay_dir = os.path.join("frontend", "web", "replays", run_name)
+        os.makedirs(replay_dir, exist_ok=True)
+        return os.path.join(replay_dir, filename)
+
     def reset(self):
 
         print("# self.eng.reset() to be implemented")
@@ -811,8 +817,8 @@ class AnonEnv:
             "flowFile": self.dic_traffic_env_conf["TRAFFIC_FILE"],
             "rlTrafficLight": self.dic_traffic_env_conf["RLTRAFFICLIGHT"],
             "saveReplay": self.dic_traffic_env_conf["SAVEREPLAY"],
-            "roadnetLogFile": "frontend/web/roadnetLogFile.json",
-            "replayLogFile": "frontend/web/replayLogFile.txt"
+            "roadnetLogFile": os.path.relpath(self._replay_path("roadnetLogFile.json"), self.path_to_work_directory),
+            "replayLogFile": os.path.relpath(self._replay_path("replayLogFile.txt"), self.path_to_work_directory)
         }
         print("=========================")
         print(cityflow_config)
@@ -1645,8 +1651,11 @@ class AnonEnv:
         return np.sqrt(np.sum((a-b)**2))
 
     def end_sumo(self):
+        import gc
         print("anon process end")
-        pass
+        if hasattr(self, 'eng'):
+            del self.eng
+            gc.collect()
 
 if __name__ == '__main__':
     dic_agent_conf = {

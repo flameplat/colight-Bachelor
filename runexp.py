@@ -25,7 +25,7 @@ TOP_K_ADJACENCY_LANE=-1
 PRETRAIN=False
 EARLY_STOP=True 
 NEIGHBOR=False
-SAVEREPLAY=False
+SAVEREPLAY=True
 ADJACENCY_BY_CONNECTION_OR_GEO=False
 hangzhou_archive=True
 ANON_PHASE_REPRE=[]
@@ -33,14 +33,14 @@ ANON_PHASE_REPRE=[]
 def parse_args():
     parser = argparse.ArgumentParser()
     # The file folder to create/log in
-    parser.add_argument("--memo", type=str, default='6_6_900_turn_drain_150_optimal')#1_3,2_2,3_3,4_4
+    parser.add_argument("--memo", type=str, default='6_6_300_turn_drain_10_GUI_optimal')#1_3,2_2,3_3,4_4
     parser.add_argument("--env", type=int, default=1) #env=1 means you will run CityFlow
     parser.add_argument("--gui", type=bool, default=False)
     parser.add_argument("--road_net", type=str, default='6_6')#'1_2') # which road net you are going to run
-    parser.add_argument("--volume", type=str, default='900')#'300'
-    parser.add_argument("--suffix", type=str, default="0.3_turn_drain")#0.3
+    parser.add_argument("--volume", type=str, default='300')#'900'
+    parser.add_argument("--suffix", type=str, default="0.3_bi")#0.3
     parser.add_argument("--rounds", type=int, default=10)
-    parser.add_argument("--topology", type=str, default=None)
+    parser.add_argument("--topology", type=str, default="optimal")
     parser.add_argument("--resume", type=str, default=None,
                         help="Path to model dir from a previous run to resume from")
 
@@ -57,7 +57,7 @@ def parse_args():
     # TAKE CARE
     NEIGHBOR=False
     global SAVEREPLAY # if you want to relay your simulation, set it to be True
-    SAVEREPLAY=False
+    SAVEREPLAY=True
     global ADJACENCY_BY_CONNECTION_OR_GEO
     # TAKE CARE
     ADJACENCY_BY_CONNECTION_OR_GEO=False

@@ -27,6 +27,8 @@ first_gen = os.path.join(TRAIN_DIR, rounds[0],
 with open(os.path.join(first_gen, "cityflow.config")) as f:
     _cfg = json.load(f)
 _roadnet_path = os.path.join(_cfg["dir"], _cfg["roadnetFile"])
+if not os.path.exists(_roadnet_path):
+    _roadnet_path = os.path.join(RUN_DIR, _cfg["roadnetFile"])
 with open(_roadnet_path) as f:
     _rn = json.load(f)
 _real_inters = [i["id"] for i in _rn["intersections"] if not i.get("virtual", True)]
