@@ -33,12 +33,12 @@ ANON_PHASE_REPRE=[]
 def parse_args():
     parser = argparse.ArgumentParser()
     # The file folder to create/log in
-    parser.add_argument("--memo", type=str, default='6_6_300_turn_drain_10_GUI_optimal')#1_3,2_2,3_3,4_4
+    parser.add_argument("--memo", type=str, default='6_6_300_turn_drain_10_GUI_none')#1_3,2_2,3_3,4_4
     parser.add_argument("--env", type=int, default=1) #env=1 means you will run CityFlow
     parser.add_argument("--gui", type=bool, default=False)
     parser.add_argument("--road_net", type=str, default='6_6')#'1_2') # which road net you are going to run
-    parser.add_argument("--volume", type=str, default='300')#'900'
-    parser.add_argument("--suffix", type=str, default="0.3_bi")#0.3
+    parser.add_argument("--volume", type=str, default='900')#'900'
+    parser.add_argument("--suffix", type=str, default="0.3_turn_drain")#0.3
     parser.add_argument("--rounds", type=int, default=10)
     parser.add_argument("--topology", type=str, default="optimal")
     parser.add_argument("--resume", type=str, default=None,
@@ -200,7 +200,7 @@ def main(memo, env, road_net, gui, volume, suffix, mod, cnt, gen, r_all, workers
 
         dic_agent_conf_extra = {
             "EPOCHS": 100,
-            "SAMPLE_SIZE": 1000,
+            "SAMPLE_SIZE": 2048,
             "MAX_MEMORY_LEN": 10000,
             "UPDATE_Q_BAR_EVERY_C_ROUND": False,
             "UPDATE_Q_BAR_FREQ": 5,
