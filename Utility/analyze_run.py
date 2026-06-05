@@ -12,7 +12,7 @@ if len(sys.argv) < 2:
     sys.exit(1)
 
 RUN_DIR = sys.argv[1]
-OUT_DIR = os.path.join(RUN_DIR, "analysis_output")
+OUT_DIR = os.path.join("analysis_output", os.path.basename(os.path.normpath(RUN_DIR)))
 os.makedirs(OUT_DIR, exist_ok=True)
 
 TRAIN_DIR = os.path.join(RUN_DIR, "train_round")
